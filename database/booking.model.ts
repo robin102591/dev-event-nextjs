@@ -40,11 +40,16 @@ BookingSchema.pre("save", async function () {
   const booking = this as IBooking;
   // Only validate eventId if it's modified or document is new
   if (this.isModified("eventId") || booking.isNew) {
-    const eventExists = await Event.findById(this.eventId);
+    const eventExists = await Event.exists({ _id: this.eventId });
     if (!eventExists) {
-      const error = new Error("Referenced event does not exist");
-      error.name = "ValidationError";
-      throw error;
+      const validationError = new mongoose.Error.ValidationError();
+      validationError.errors["eventId"] = new mongoose.Error.ValidatorError({
+        path: "eventId",
+        message: "Referenced event does not exist",
+        type: "user defined",
+        value: this.eventId,
+      });
+      throw validationError;
     }
   }
 });

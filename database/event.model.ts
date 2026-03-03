@@ -105,27 +105,37 @@ const EventSchema = new Schema<IEvent>(
 EventSchema.pre('save', function () {
   // Generate slug only if title is modified or document is new
   if (this.isModified('title')) {
-    this.slug = this.title
+    const sanitized = this.title
       .toLowerCase()
       .trim()
       .replace(/[^\w\s-]/g, '') // Remove special characters
       .replace(/\s+/g, '-') // Replace spaces with hyphens
       .replace(/--+/g, '-') // Replace multiple hyphens with single hyphen
       .replace(/^-+|-+$/g, ''); // Remove leading/trailing hyphens
+    this.slug = sanitized || `untitled-${this._id.toString()}`;
   }
 
-  // Normalize date to ISO format (YYYY-MM-DD)
+  // Normalize date to ISO format (YYYY-MM-DD) with strict calendar validation
   if (this.isModified('date')) {
-    const parsedDate = new Date(this.date);
-    if (isNaN(parsedDate.getTime())) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(this.date)) {
       throw new Error('Invalid date format');
     }
-    this.date = parsedDate.toISOString().split('T')[0];
+    const [year, month, day] = this.date.split('-').map(Number);
+    const ts = Date.UTC(year, month - 1, day);
+    const utc = new Date(ts);
+    if (
+      utc.getUTCFullYear() !== year ||
+      utc.getUTCMonth() + 1 !== month ||
+      utc.getUTCDate() !== day
+    ) {
+      throw new Error('Invalid date format');
+    }
+    this.date = utc.toISOString().split('T')[0];
   }
 
   // Normalize time format to HH:MM (24-hour format)
   if (this.isModified('time')) {
-    const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
+    const timeRegex = /^([0-1][0-9]|2[0-3]):[0-5][0-9]$/;
     if (!timeRegex.test(this.time)) {
       throw new Error('Time must be in HH:MM format (24-hour)');
     }
